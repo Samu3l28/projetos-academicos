@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro e Delimitação de Propriedade</title>
+
+    <!-- Estilos -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            font-size: 1.8rem;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #007bff;
+        }
+        .company-info {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        input, button {
+            padding: 12px 16px;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+        input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #map {
+            width: 100%;
+            height: 400px;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        #search-box-container {
+            margin-bottom: 10px;
+            display: flex;
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Cadastro e Delimitação de Propriedade</h1>
+        <div class="company-info">
+            <p><strong>Casa da Chuva</strong></p>
+            <p>Telefone: (34) 3235-9625</p>
+            <p>WhatsApp: (34) 9 9659-6507</p>
+            <p>Email: financeiro@casadachuva.com</p>
+            <p>Endereço: Av. Vasconcelos Costa, 789 - Martins, Uberlândia - MG, 38400-450</p>
+        </div>
+        <form action="https://formsubmit.co/rbsamuel07@gmail.com" method="POST">
+            <label for="name">Nome:</label>
+            <input type="text" name="name" id="name" placeholder="Nome completo" required>
+            
+            <label for="email">E-mail:</label>
+            <input type="email" name="email" id="email" placeholder="E-mail válido" required>
+            
+            <label for="cpf_cnpj">CPF ou CNPJ:</label>
+            <input type="text" name="cpf_cnpj" id="cpf_cnpj" placeholder="CPF ou CNPJ" required>
+            
+            <label for="phone">Telefone:</label>
+            <input type="tel" name="phone" id="phone" placeholder="Telefone para contato" required>
+            
+            <label for="address">Endereço:</label>
+            <input type="text" name="address" id="address" placeholder="Endereço completo" required>
+            
+            <input type="hidden" name="polygon" id="polygon">
+            <input type="hidden" name="centroid" id="centroid">
+            
+            <div id="search-box-container">
+                <input id="search-box" type="text" placeholder="Pesquise um local..." />
+            </div>
+            
+            <div id="map" aria-label="Mapa interativo para delimitação de propriedade"></div>
+            
+            <button type="button" id="clear-button">Redesenhar Área</button>
+            <button type="submit">Enviar</button>
+        </form>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        let map;
+        let selectedShape = null;
+        const polygonInput = document.getElementById("polygon");
+        const centroidInput = document.getElementById("centroid");
+    
+        // Inicializar o mapa
+        function initMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                center: { lat: -15.7942, lng: -47.8822 },
+                zoom: 5,
+            });
+    
+            const drawingManager = new google.maps.drawing.DrawingManager({
+                drawingMode: google.maps.drawing.OverlayType.POLYGON,
+                drawingControl: true,
+                drawingControlOptions: {
+                    position: google.maps.ControlPosition.TOP_CENTER,
+                    drawingModes: [google.maps.drawing.OverlayType.POLYGON],
+                },
+                polygonOptions: { editable: true },
+            });
+    
+            drawingManager.setMap(map);
+    
+            // Evento ao completar um desenho
+            google.maps.event.addListener(drawingManager, "overlaycomplete", event => {
+                if (selectedShape) selectedShape.setMap(null); // Remove forma anterior
+                selectedShape = event.overlay;
+                updatePolygonCoordinates();
+            });
+    
+            // Configuração da barra de busca
+            const searchBox = new google.maps.places.SearchBox(document.getElementById("search-box"));
+            map.controls[google.maps.ControlPosition.TOP_LEFT].push(document.getElementById("search-box"));
+    
+            map.addListener("bounds_changed", () => {
+                searchBox.setBounds(map.getBounds());
+            });
+    
+            searchBox.addListener("places_changed", () => {
+                const places = searchBox.getPlaces();
+                if (places.length === 0) return;
+    
+                const bounds = new google.maps.LatLngBounds();
+                places.forEach(place => {
+                    if (!place.geometry || !place.geometry.location) return;
+                    bounds.extend(place.geometry.location);
+                });
+                map.fitBounds(bounds);
+            });
+    
+            // Botão para redesenhar
+            document.getElementById("clear-button").addEventListener("click", () => {
+                if (selectedShape) selectedShape.setMap(null);
+                selectedShape = null;
+                polygonInput.value = "";
+                centroidInput.value = "";
+            });
+        }
+    
+        // Atualizar coordenadas do polígono
+        function updatePolygonCoordinates() {
+            if (!selectedShape) return;
+    
+            const path = selectedShape.getPath().getArray().map(coord => ({
+                lat: coord.lat(),
+                lng: coord.lng()
+            }));
+    
+            polygonInput.value = JSON.stringify(path);
+    
+            // Calcular o centroide
+            const centroid = calculateCentroid(path);
+    
+            // Adicionar o centroide ao formulário
+            centroidInput.value = JSON.stringify(centroid);
+    
+            console.log(`Centroide calculado: Latitude = ${centroid.lat}, Longitude = ${centroid.lng}`);
+        }
+    
+        // Calcular o centroide do polígono
+        function calculateCentroid(path) {
+            let x = 0, y = 0, n = path.length;
+            path.forEach(coord => {
+                x += coord.lat;
+                y += coord.lng;
+            });
+            return { lat: x / n, lng: y / n };
+        }
+    </script>
+    
+    <!-- API do Google Maps -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBGMUMRSQAB8jWnD_KxYeqMpvAdYmtDkNo&libraries=drawing,geometry,places" defer onload="initMap()"></script>    
+</body>
+</html>
